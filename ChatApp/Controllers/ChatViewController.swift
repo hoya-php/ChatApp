@@ -16,6 +16,8 @@ class ChatViewController: UIViewController, UITableViewDelegate, UITableViewData
     @IBOutlet weak var tableView: UITableView!
     @IBOutlet weak var messageTextField: UITextField!
 
+    @IBOutlet weak var sendButton: UIButton!
+    
     let screenSize = UIScreen.main.bounds.size
     
     var chatArray = [Message()]
@@ -36,6 +38,9 @@ class ChatViewController: UIViewController, UITableViewDelegate, UITableViewData
         
         tableView.estimatedRowHeight = 44
         
+        //テーブルビューレイアウト　セルのハイライトを消す
+        tableView.separatorStyle = .none
+        
         //キーボード出現メソッド
         NotificationCenter.default.addObserver(self,
                                                selector: #selector(ChatViewController.keyboardWillShow(_ :)),
@@ -49,6 +54,7 @@ class ChatViewController: UIViewController, UITableViewDelegate, UITableViewData
                                                object: nil)
     
         //Firebaseからデータをfetchしてくる（チャットログ取得）
+        fetchChatData()
         
     }
     
@@ -79,10 +85,58 @@ class ChatViewController: UIViewController, UITableViewDelegate, UITableViewData
     }
     
     //send button method
-    @IBAction func sendButton(_ sender: Any) {
+    @IBAction func sendAction(_ sender: Any) {
+        //TextFieldの編集を終わらせる。
+        messageTextField.endEditing(true)
+        messageTextField.isEnabled = false
+        sendButton.isEnabled = false
+        
+        let chatDB = Database.database().reference().child("chats")
+        
+        //キーバリュー型にて内容を送信（辞書型 Dictionary）
+        let messageInfo = ["sender": Auth.auth().currentUser?.email,
+                           "message": messageTextField.text!]
+        
+        //chatDBに保存
+        chatDB.childByAutoId().setValue(messageInfo) {
+            (error, result) in
+              
+            if error != nil {
+                print(error!)
+            } else {
+                
+                print("send complete")
+                self.messageTextField.isEnabled = true
+                self.sendButton.isEnabled = true
+                self.messageTextField.text = ""
+                
+            }
+            
+        }
+        
     }
     
-    
+    //Database fetch method
+    func fetchChatData() {
+        //どこからデータを引っ張るか
+        let fetchDataRef = Database.database().reference().child("chats")
+        
+        //新しく更新があったときだけ取得したい
+        fetchDataRef.observe(.childAdded) {
+            (snapShot) in
+            
+            let snapShotData = snapShot.value as AnyObject
+            let sender = snapShotData.value(forKey: "sender")
+            let text = snapShotData.value(forKey: "message")
+
+            var message = Message()
+            message.sender = sender as! String
+            message.message = text as! String
+            self.chatArray.append(message)
+            self.tableView.reloadData()
+            
+        }
+    }
     
     //TableView Config
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
