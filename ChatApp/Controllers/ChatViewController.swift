@@ -10,7 +10,7 @@ import UIKit
 import ChameleonFramework
 import Firebase
 
-class ChatViewController: UIViewController, UITableViewDelegate, UITableViewDataSource {
+class ChatViewController: UIViewController, UITableViewDelegate, UITableViewDataSource, UITextFieldDelegate {
 
     
     @IBOutlet weak var tableView: UITableView!
@@ -29,6 +29,7 @@ class ChatViewController: UIViewController, UITableViewDelegate, UITableViewData
         
         tableView.delegate = self
         tableView.dataSource = self
+        messageTextField.delegate = self
         
         tableView.register(UINib(nibName: "CustomCell", bundle: nil),
                            forCellReuseIdentifier: "Cell")
@@ -58,30 +59,35 @@ class ChatViewController: UIViewController, UITableViewDelegate, UITableViewData
         
     }
     
-    @objc func keyboardWillShow(_ notification: NSNotification) {
-        
-        let keyboardHeight = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as AnyObject).cgRectValue.height
-        
-        messageTextField.frame.origin.y = screenSize.height - keyboardHeight - messageTextField.frame.height
-        
+    // キーボードが表示時に画面をずらす。
+    @objc func keyboardWillShow(_ notification: Notification?) {
+        guard let rect = (notification?.userInfo?[UIResponder.keyboardFrameBeginUserInfoKey] as? NSValue)?.cgRectValue,
+            let duration = notification?.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval else { return }
+        UIView.animate(withDuration: duration) {
+            let transform = CGAffineTransform(translationX: 0, y: -(rect.size.height))
+            self.view.transform = transform
+        }
     }
     
-    
-    @objc func keyboardWillHide(_ notification: NSNotification) {
-        
-        messageTextField.frame.origin.y = screenSize.height - messageTextField.frame.height
-        
-        guard let _ = (notification.userInfo![UIResponder.keyboardFrameBeginUserInfoKey] as? NSValue)?.cgRectValue,
-            let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval else { return }
-        
+    //// キーボードが消えたときに、画面を戻す
+    @objc func keyboardWillHide(_ notification: Notification?) {
+        guard let duration = notification?.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? TimeInterval else { return }
         UIView.animate(withDuration: duration) {
-            
-            let transform = CGAffineTransform(translationX: 0,
-                                              y: 0)
-            self.view.transform = transform
-            
+            self.view.transform = CGAffineTransform.identity
         }
-        
+    }
+    
+    //関係ないところをタップすると戻す。
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if self.messageTextField.isFirstResponder == true {
+            self.messageTextField.resignFirstResponder()
+        }
+    }
+    
+    //キーボードでリターン押されると戻す。
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        textField.resignFirstResponder()
+        return true
     }
     
     //send button method
@@ -90,6 +96,9 @@ class ChatViewController: UIViewController, UITableViewDelegate, UITableViewData
         messageTextField.endEditing(true)
         messageTextField.isEnabled = false
         sendButton.isEnabled = false
+        
+        //Message Count send faild
+        if messageTextField.text!.count > 15 { return }
         
         let chatDB = Database.database().reference().child("chats")
         
@@ -148,21 +157,29 @@ class ChatViewController: UIViewController, UITableViewDelegate, UITableViewData
         return 1
     }
     
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        return view.frame.size.height / 10
+    }
+    
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         
         let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath) as! CustomCell
         
+        cell.userName.text = chatArray[indexPath.row].sender
         cell.messageLabel.text = chatArray[indexPath.row].message
-        cell.userName.text = chatArray[indexPath.row].message
         cell.iconImageView.image = UIImage(named: "dogAvatarImage")
         
         if cell.userName.text == Auth.auth().currentUser?.email! {
         
             cell.messageLabel.backgroundColor = UIColor.flatGreen()
+            cell.messageLabel.layer.cornerRadius = 10.0
+            cell.messageLabel.layer.masksToBounds = true
             
         } else {
             
             cell.messageLabel.backgroundColor = UIColor.flatBlue()
+            cell.messageLabel.layer.cornerRadius = 10.0
+            cell.messageLabel.layer.masksToBounds = true
             
         }
         
@@ -171,20 +188,4 @@ class ChatViewController: UIViewController, UITableViewDelegate, UITableViewData
     }
     
 
-}
-
-//キーボード操作プロトコルパターン
-extension ChatViewController: UITextFieldDelegate {
-    
-    //関係ないところをタップすると戻す。
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        messageTextField.resignFirstResponder()
-    }
-    
-    //キーボードでリターン押されると戻す。
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        textField.resignFirstResponder()
-        return true
-    }
-    
 }

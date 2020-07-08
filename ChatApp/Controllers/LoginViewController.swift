@@ -38,6 +38,8 @@ class LoginViewController: UIViewController {
                                 if error != nil {
                                     
                                     print(error as Any)
+                                    
+                                    self.lottieAnimation.stopAnimation()
                     
                                 } else {
                                     
